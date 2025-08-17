@@ -7,5 +7,5 @@ bases:
 
 # 这里定义镜像，GitHub Actions 会修改这行
 images:
-  - name: ghcr.io/hazz78/my-app
-    newTag: 24a0c4b4a4c0eb97a1aabb8e29f18e917d05abfe1b7a7c07857230879ce7d3d3
+  - name: ghcr.io/yourusername/my-app
+    newTag: latest
