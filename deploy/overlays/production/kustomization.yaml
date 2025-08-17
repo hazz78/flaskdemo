@@ -1,0 +1,11 @@
+# deploy/overlays/production/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+bases:
+  - ../../base
+
+# 这里定义镜像，GitHub Actions 会修改这行
+images:
+  - name: ghcr.io/hazz78/my-app
+    newTag: latest
