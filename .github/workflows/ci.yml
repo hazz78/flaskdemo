@@ -1,49 +1,61 @@
-name: Build and Push Docker Image
+# .github/workflows/ci-cd.yml
+name: CI/CD Pipeline
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [ main ]
 
 jobs:
-  build-and-push:
+  build-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 允许推送到 Git
+      packages: write  # 如果使用 GHCR
 
     steps:
-    - name: Checkout source code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Check DockerHub secrets
-      run: |
-        if [ -z "${{ secrets.DOCKER_USERNAME }}" ] || [ -z "${{ secrets.DOCKER_PASSWORD }}" ]; then
-          echo "❌ ERROR: DOCKER_USERNAME or DOCKER_PASSWORD is missing"
-          exit 1
-        fi
+      - name: Set Up Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+      - name: Extract Version
+        id: vars
+        run: |
+          # 使用短 commit hash 作为版本
+          echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      with:
-        install: true
+      - name: Build Docker Image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/my-app:${{ env.VERSION }} .
 
-    - name: Docker login
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract tag name
-      id: vars
-      run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+      - name: Push Docker Image
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/my-app:${{ env.VERSION }}
 
-    - name: Build and push Docker image (multi-arch + latest)
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        platforms: linux/amd64,linux/arm64
-        tags: |
-          cloudsmithy/flask-demo:${{ env.TAG }}
-          cloudsmithy/flask-demo:latest
+      - name: Update Kustomize Image Tag
+        run: |
+          kustomize edit set image ghcr.io/${{ github.repository_owner }}/my-app:${{ env.VERSION }}
+          # 查看变更
+          cat deploy/overlays/production/kustomization.yaml
+
+      - name: Commit & Push to Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add deploy/overlays/production/kustomization.yaml
+          git commit -m "ci: deploy version ${{ env.VERSION }}"
+          git push origin main
+
+      - name: Notify (Optional)
+        run: |
+          echo "✅ Deployed version ${{ env.VERSION }} to production via Argo CD"
