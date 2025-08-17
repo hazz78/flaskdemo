@@ -1,0 +1,12 @@
+# deploy/base/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# 声明你要管理的资源
+resources:
+  - deployment.yaml
+
+# 其他配置（可选）
+namespace: default
+commonLabels:
+  app: my-app
